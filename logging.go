@@ -93,7 +93,7 @@ func (l *logging) Write(buf *bytes.Buffer) {
 
 func (l *logging) Debug(args ...interface{}) {
 	if l.Level <= DEBUG_LEVEL {
-		s := fmt.Sprintln(args)
+		s := fmt.Sprint(args...)
 		l.Write(l.Formater(l.Name, levelMap[DEBUG_LEVEL], l.CallerLevel, l.Pool, s))
 	}
 }
@@ -107,21 +107,21 @@ func (l *logging) Info(args ...interface{}) {
 
 func (l *logging) Warn(args ...interface{}) {
 	if l.Level <= WARN_LEVEL {
-		s := fmt.Sprintln(args)
+		s := fmt.Sprint(args...)
 		l.Write(l.Formater(l.Name, levelMap[WARN_LEVEL], l.CallerLevel, l.Pool, s))
 	}
 }
 
 func (l *logging) Error(args ...interface{}) {
 	if l.Level <= ERROR_LEVEL {
-		s := fmt.Sprintln(args)
+		s := fmt.Sprint(args...)
 		l.Write(l.Formater(l.Name, levelMap[ERROR_LEVEL], l.CallerLevel, l.Pool, s))
 	}
 }
 
 func (l *logging) Fatal(args ...interface{}) {
 	if l.Level <= FATAL_LEVEL {
-		s := fmt.Sprintln(args)
+		s := fmt.Sprint(args...)
 		l.Write(l.Formater(l.Name, levelMap[FATAL_LEVEL], l.CallerLevel, l.Pool, s))
 	}
 	os.Exit(1)
