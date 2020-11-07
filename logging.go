@@ -74,10 +74,10 @@ type logging struct {
 	Level        LoggingLevel
 	Out          io.Writer
 	OutPath      string
-	Pool         *bufferpool.BufferPool
+	Pool         *BufferPool
 	EnableCaller bool
 	CallerLevel  int
-	Formater     func(string, string, int, *bufferpool.BufferPool, string, ...interface{}) *bytes.Buffer
+	Formater     func(string, string, int, *BufferPool, string, ...interface{}) *bytes.Buffer
 }
 
 func (l *logging) Close() {
