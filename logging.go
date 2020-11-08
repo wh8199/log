@@ -13,12 +13,15 @@ type LoggingInterface interface {
 	Warn(args ...interface{})
 	Error(args ...interface{})
 	Fatal(args ...interface{})
+
 	Debugf(format string, args ...interface{})
 	Infof(format string, args ...interface{})
 	Warnf(format string, args ...interface{})
 	Errorf(format string, args ...interface{})
 	Fatalf(format string, args ...interface{})
 	Close()
+
+	SetOutPut(w io.Writer)
 }
 
 type LoggingLevel int
@@ -43,11 +46,10 @@ func init() {
 	levelMap[FATAL_LEVEL] = "Fatal"
 }
 
-func NewLogging(name, outpath string, level LoggingLevel, callerLevel int) LoggingInterface {
+func NewLogging(name string, level LoggingLevel, callerLevel int) LoggingInterface {
 	return &logging{
 		Name:         name,
 		Level:        level,
-		OutPath:      outpath,
 		Out:          os.Stdout,
 		Pool:         NewBufferPool(),
 		EnableCaller: true,
@@ -56,11 +58,10 @@ func NewLogging(name, outpath string, level LoggingLevel, callerLevel int) Loggi
 	}
 }
 
-func NewLoggingWithFormater(name, outpath string, level LoggingLevel, callerLevel int, formater Formatter) LoggingInterface {
+func NewLoggingWithFormater(name string, level LoggingLevel, callerLevel int, formater Formatter) LoggingInterface {
 	return &logging{
 		Name:         name,
 		Level:        level,
-		OutPath:      outpath,
 		Out:          os.Stdout,
 		Pool:         NewBufferPool(),
 		EnableCaller: true,
@@ -73,7 +74,6 @@ type logging struct {
 	Name         string
 	Level        LoggingLevel
 	Out          io.Writer
-	OutPath      string
 	Pool         *BufferPool
 	EnableCaller bool
 	CallerLevel  int
@@ -84,6 +84,10 @@ func (l *logging) Close() {
 	if closer, ok := l.Out.(io.WriteCloser); ok {
 		closer.Close()
 	}
+}
+
+func (l *logging) SetOutPut(w io.Writer) {
+	l.Out = w
 }
 
 func (l *logging) Write(buf *bytes.Buffer) {
