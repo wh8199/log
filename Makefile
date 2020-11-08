@@ -2,6 +2,6 @@ test:
 	go test
 
 bench:
-	go test -bench . -count 5
+	go test -bench .
 
 .PHONY: test bench
