@@ -1,4 +1,7 @@
 test:
 	go test
 
-.PHONY: test
+bench:
+	go test -bench . -count 5
+
+.PHONY: test bench

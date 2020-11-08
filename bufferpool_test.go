@@ -28,3 +28,14 @@ func TestAlloc(t *testing.T) {
 		t.Fatalf("expected less than 100 frees after GC, got %d", frees)
 	}
 }
+
+func BenchmarkAlloc(b *testing.B) {
+	pool := log.NewBufferPool()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b := pool.Get()
+		b.WriteString("Hello")
+		pool.Put(b)
+	}
+}
