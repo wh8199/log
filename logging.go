@@ -34,16 +34,21 @@ const (
 	FATAL_LEVEL
 )
 
-var levelMap map[LoggingLevel]string
-
-func init() {
-	levelMap = map[LoggingLevel]string{}
-
-	levelMap[DEBUG_LEVEL] = "Debug"
-	levelMap[INFO_LEVEL] = "Info"
-	levelMap[WARN_LEVEL] = "Warn"
-	levelMap[ERROR_LEVEL] = "Error"
-	levelMap[FATAL_LEVEL] = "Fatal"
+func (level LoggingLevel) String() string {
+	switch level {
+	case DEBUG_LEVEL:
+		return "Debug"
+	case INFO_LEVEL:
+		return "Info"
+	case WARN_LEVEL:
+		return "Warn"
+	case ERROR_LEVEL:
+		return "Error"
+	case FATAL_LEVEL:
+		return "Fatal"
+	default:
+		return "Unknown"
+	}
 }
 
 func NewLogging(name string, level LoggingLevel, callerLevel int) LoggingInterface {
@@ -77,7 +82,7 @@ type logging struct {
 	Pool         *BufferPool
 	EnableCaller bool
 	CallerLevel  int
-	Formater     func(string, string, int, *BufferPool, string, ...interface{}) *bytes.Buffer
+	Formater     func(string, LoggingLevel, int, *BufferPool, string, ...interface{}) *bytes.Buffer
 }
 
 func (l *logging) Close() {
@@ -98,66 +103,66 @@ func (l *logging) Write(buf *bytes.Buffer) {
 func (l *logging) Debug(args ...interface{}) {
 	if l.Level <= DEBUG_LEVEL {
 		s := fmt.Sprint(args...)
-		l.Write(l.Formater(l.Name, levelMap[DEBUG_LEVEL], l.CallerLevel, l.Pool, s))
+		l.Write(l.Formater(l.Name, DEBUG_LEVEL, l.CallerLevel, l.Pool, s))
 	}
 }
 
 func (l *logging) Info(args ...interface{}) {
 	if l.Level <= INFO_LEVEL {
 		s := fmt.Sprint(args...)
-		l.Write(l.Formater(l.Name, levelMap[INFO_LEVEL], l.CallerLevel, l.Pool, s))
+		l.Write(l.Formater(l.Name, INFO_LEVEL, l.CallerLevel, l.Pool, s))
 	}
 }
 
 func (l *logging) Warn(args ...interface{}) {
 	if l.Level <= WARN_LEVEL {
 		s := fmt.Sprint(args...)
-		l.Write(l.Formater(l.Name, levelMap[WARN_LEVEL], l.CallerLevel, l.Pool, s))
+		l.Write(l.Formater(l.Name, WARN_LEVEL, l.CallerLevel, l.Pool, s))
 	}
 }
 
 func (l *logging) Error(args ...interface{}) {
 	if l.Level <= ERROR_LEVEL {
 		s := fmt.Sprint(args...)
-		l.Write(l.Formater(l.Name, levelMap[ERROR_LEVEL], l.CallerLevel, l.Pool, s))
+		l.Write(l.Formater(l.Name, ERROR_LEVEL, l.CallerLevel, l.Pool, s))
 	}
 }
 
 func (l *logging) Fatal(args ...interface{}) {
 	if l.Level <= FATAL_LEVEL {
 		s := fmt.Sprint(args...)
-		l.Write(l.Formater(l.Name, levelMap[FATAL_LEVEL], l.CallerLevel, l.Pool, s))
+		l.Write(l.Formater(l.Name, FATAL_LEVEL, l.CallerLevel, l.Pool, s))
 	}
 	os.Exit(1)
 }
 
 func (l *logging) Debugf(format string, args ...interface{}) {
 	if l.Level <= DEBUG_LEVEL {
-		l.Write(l.Formater(l.Name, levelMap[DEBUG_LEVEL], l.CallerLevel, l.Pool, format, args...))
+		l.Write(l.Formater(l.Name, DEBUG_LEVEL, l.CallerLevel, l.Pool, format, args...))
 	}
 }
 
 func (l *logging) Infof(format string, args ...interface{}) {
 	if l.Level <= INFO_LEVEL {
-		l.Write(l.Formater(l.Name, levelMap[INFO_LEVEL], l.CallerLevel, l.Pool, format, args...))
+		l.Write(l.Formater(l.Name, INFO_LEVEL, l.CallerLevel, l.Pool, format, args...))
 	}
 }
 
 func (l *logging) Warnf(format string, args ...interface{}) {
 	if l.Level <= WARN_LEVEL {
-		l.Write(l.Formater(l.Name, levelMap[WARN_LEVEL], l.CallerLevel, l.Pool, format, args...))
+		l.Write(l.Formater(l.Name, WARN_LEVEL, l.CallerLevel, l.Pool, format, args...))
 	}
 }
 
 func (l *logging) Errorf(format string, args ...interface{}) {
 	if l.Level <= ERROR_LEVEL {
-		l.Write(l.Formater(l.Name, levelMap[ERROR_LEVEL], l.CallerLevel, l.Pool, format, args...))
+		l.Write(l.Formater(l.Name, ERROR_LEVEL, l.CallerLevel, l.Pool, format, args...))
 	}
 }
 
 func (l *logging) Fatalf(format string, args ...interface{}) {
 	if l.Level <= FATAL_LEVEL {
-		l.Write(l.Formater(l.Name, levelMap[FATAL_LEVEL], l.CallerLevel, l.Pool, format, args...))
+		l.Write(l.Formater(l.Name, FATAL_LEVEL, l.CallerLevel, l.Pool, format, args...))
 	}
 	os.Exit(1)
 }
