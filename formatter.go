@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"runtime"
-	"strconv"
 )
 
-type Formatter func(name, level string, callerLevel int, pool *BufferPool, format string, args ...interface{}) *bytes.Buffer
+type Formatter func(name string, level LoggingLevel, callerLevel int, pool *BufferPool, format string, args ...interface{}) *bytes.Buffer
 
-func DefaultFormater(name, level string, callerLevel int, pool *BufferPool, format string, args ...interface{}) *bytes.Buffer {
+func DefaultFormater(name string, level LoggingLevel, callerLevel int, pool *BufferPool, format string, args ...interface{}) *bytes.Buffer {
 	var (
 		s string
 	)
@@ -24,7 +23,8 @@ func DefaultFormater(name, level string, callerLevel int, pool *BufferPool, form
 
 	_, caller, line, _ := runtime.Caller(callerLevel)
 
-	result := "[ " + name + " ] " + time + " " + caller + ":" + strconv.Itoa(line) + " " + level + " msg: " + s + "\n"
+	result := fmt.Sprintf("[ %s ] %s %s %d %v msg: %s\n",
+		name, time, caller, line, level, s)
 
 	buf := pool.Get()
 	buf.WriteString(result)
