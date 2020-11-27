@@ -23,7 +23,7 @@ func DefaultFormater(name string, level LoggingLevel, callerLevel int, pool *Buf
 
 	_, caller, line, _ := runtime.Caller(callerLevel)
 
-	result := fmt.Sprintf("[ %s ] %s %s %d %v msg: %s\n",
+	result := fmt.Sprintf("[ %s ] %s %s:%d %v msg: %s\n",
 		name, time, caller, line, level, s)
 
 	buf := pool.Get()
