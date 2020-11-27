@@ -52,6 +52,10 @@ func (level LoggingLevel) String() string {
 }
 
 func NewLogging(name string, level LoggingLevel, callerLevel int) LoggingInterface {
+	if level < DEBUG_LEVEL || level > FATAL_LEVEL {
+		level = INFO_LEVEL
+	}
+
 	return &logging{
 		Name:         name,
 		Level:        level,
@@ -64,6 +68,10 @@ func NewLogging(name string, level LoggingLevel, callerLevel int) LoggingInterfa
 }
 
 func NewLoggingWithFormater(name string, level LoggingLevel, callerLevel int, formater Formatter) LoggingInterface {
+	if level < DEBUG_LEVEL || level > FATAL_LEVEL {
+		level = INFO_LEVEL
+	}
+
 	return &logging{
 		Name:         name,
 		Level:        level,
