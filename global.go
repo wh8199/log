@@ -82,9 +82,13 @@ func Fatalf(format string, args ...interface{}) {
 }
 
 func Println(args ...interface{}) {
-	logger.Info(args)
+	logger.Info(args...)
 }
 
 func Printf(format string, args ...interface{}) {
-	logger.Infof(format, args)
+	logger.Infof(format, args...)
+}
+
+func Fatalln(args ...interface{}) {
+	logger.Fatal(args...)
 }
