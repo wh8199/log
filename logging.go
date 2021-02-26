@@ -22,6 +22,7 @@ type LoggingInterface interface {
 	Close()
 
 	SetOutPut(w io.Writer)
+	SetLevel(level LoggingLevel)
 }
 
 type LoggingLevel int
@@ -106,6 +107,10 @@ func (l *logging) SetOutPut(w io.Writer) {
 func (l *logging) Write(buf *bytes.Buffer) {
 	l.Out.Write(buf.Bytes())
 	l.Pool.Put(buf)
+}
+
+func (l *logging) SetLevel(level LoggingLevel) {
+	l.Level = level
 }
 
 func (l *logging) Debug(args ...interface{}) {
