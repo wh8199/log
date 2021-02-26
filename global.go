@@ -80,3 +80,11 @@ func Fatal(args ...interface{}) {
 func Fatalf(format string, args ...interface{}) {
 	logger.Fatalf(format, args...)
 }
+
+func Println(args ...interface{}) {
+	logger.Info(args)
+}
+
+func Printf(format string, args ...interface{}) {
+	logger.Infof(format, args)
+}
