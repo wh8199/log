@@ -11,7 +11,7 @@ var (
 )
 
 func init() {
-	logger = NewLoggingWithFormater("global", INFO_LEVEL, 1, globalLogFormatter)
+	logger = NewLoggingWithFormater("global", INFO_LEVEL, 3, globalLogFormatter)
 }
 
 func globalLogFormatter(name string, level LoggingLevel, callerLevel int, pool *BufferPool, format string, args ...interface{}) *bytes.Buffer {
