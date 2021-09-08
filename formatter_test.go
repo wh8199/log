@@ -3,9 +3,9 @@ package log_test
 import (
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/wh8199/log"
 )
 
@@ -15,13 +15,23 @@ func TestDefaultFormatter(t *testing.T) {
 
 	testMessage := "Test"
 	buf := log.DefaultFormater("test", log.INFO_LEVEL, 2, bufferPool, testMessage)
-	assert.Contains(t, buf.String(), caller+":"+strconv.Itoa(line)+" "+"Info"+" msg: "+testMessage+"\n")
+
+	if strings.Contains(buf.String(), caller+":"+strconv.Itoa(line)+" "+"Info"+" msg: "+testMessage+"\n") {
+		t.Error("test failed for default formatter")
+		return
+	}
 
 	buf1 := log.DefaultFormater("test", log.INFO_LEVEL, 2, bufferPool, "Test %d", 1)
 	s1 := "Test 1"
-	assert.Contains(t, buf1.String(), caller+":"+strconv.Itoa(line)+" "+"Info"+" msg: "+s1+"\n")
+	if strings.Contains(buf1.String(), caller+":"+strconv.Itoa(line)+" "+"Info"+" msg: "+s1+"\n") {
+		t.Error("test failed for default formatter")
+		return
+	}
 
 	buf2 := log.DefaultFormater("test", log.INFO_LEVEL, 2, bufferPool, "Test %.1f", 1.2)
 	s2 := "Test 1.2"
-	assert.Contains(t, buf2.String(), caller+":"+strconv.Itoa(line)+" "+"Info"+" msg: "+s2+"\n")
+	if strings.Contains(buf2.String(), caller+":"+strconv.Itoa(line)+" "+"Info"+" msg: "+s2+"\n") {
+		t.Error("test failed for default formatter")
+		return
+	}
 }
