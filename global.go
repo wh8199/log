@@ -3,6 +3,7 @@ package log
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"runtime"
 )
 
@@ -91,4 +92,8 @@ func Printf(format string, args ...interface{}) {
 
 func Fatalln(args ...interface{}) {
 	logger.Fatal(args...)
+}
+
+func SetOutPut(w io.Writer) {
+	logger.SetOutPut(w)
 }
