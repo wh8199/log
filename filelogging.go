@@ -1,24 +1,30 @@
 package log
 
 import (
+	"fmt"
+	"io/ioutil"
 	"os"
+	"regexp"
 	"sync"
+	"time"
 )
 
 type FileLogging interface {
 	LoggingInterface
+	Start()
 }
 type fileLogging struct {
-	mu sync.RWMutex
+	mu sync.Mutex
 	logging
 	isLogFile bool
 	fileDir   string
 	maxSize   int64
+	maxHour   int64
 	prefix    string
 	fileName  string
 }
 
-func NewFileLogging(name string, level LoggingLevel, callerLevel int, isLogFile bool, fileDir, prefix string, maxSize int64) FileLogging {
+func NewFileLogging(name string, level LoggingLevel, callerLevel int, isLogFile bool, fileDir, prefix string, maxSize, maxHour int64) FileLogging {
 	if fileDir == "" {
 		fileDir = getCurrentPath()
 	}
@@ -26,8 +32,12 @@ func NewFileLogging(name string, level LoggingLevel, callerLevel int, isLogFile 
 		prefix = "log"
 	}
 	if maxSize < 20 {
-		maxSize = 20 //MB
+		maxSize = 20
 	}
+	if maxHour < 1 {
+		maxHour = 1
+	}
+	maxSize = maxSize << 20 //MB
 	logging := &fileLogging{
 		logging: logging{
 			Name:         name,
@@ -38,44 +48,93 @@ func NewFileLogging(name string, level LoggingLevel, callerLevel int, isLogFile 
 			CallerLevel:  callerLevel,
 			Formater:     DefaultFormater,
 		},
-		mu:      sync.RWMutex{},
-		fileDir: fileDir,
-		maxSize: maxSize,
-		prefix:  prefix,
-	}
-	if isLogFile {
-		logging.Start()
+		mu:        sync.Mutex{},
+		fileDir:   fileDir,
+		isLogFile: isLogFile,
+		maxSize:   maxSize,
+		maxHour:   maxHour,
+		prefix:    prefix,
 	}
 	return logging
 }
+
+func NewFileLoggingAndStart(name string, level LoggingLevel, callerLevel int, isLogFile bool, fileDir string, prefix string, maxSize int64, maxHour int64) FileLogging {
+	logging := NewFileLogging(name, level, callerLevel, isLogFile, fileDir, prefix, maxSize, maxHour)
+	logging.Start()
+	return logging
+}
+
+func NewDefaultFileLoggingAndStart(name string, level LoggingLevel, callerLevel int, isLogFile bool) FileLogging {
+	logging := NewFileLogging(name, level, callerLevel, isLogFile, "", "", 20, 7*24)
+	logging.Start()
+	return logging
+}
+
 func (f *fileLogging) Start() {
-	if err := f.initLogFile(); err != nil {
-		f.Fatalf("log file is err:%s", err.Error())
+	if !f.isLogFile {
+		return
 	}
+	for {
+		if err := f.initLogFile(); err != nil {
+			f.Error(err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		break
+	}
+
+	go f.logSplit()
+	go f.logDelete()
 }
 
 func (f *fileLogging) initLogFile() error {
+	defer func() {
+		if err := recover(); err != nil {
+			f.Errorf("init log file  panic: %v\n", err)
+		}
+	}()
 	f.fileName = generateFileName(f.prefix)
 	logFile := joinFilePath(f.fileDir, f.fileName)
-	if !isExist(logFile) {
+	if !isExist(f.fileDir) {
 		if err := os.Mkdir(f.fileDir, 0755); err != nil {
 			return err
 		}
 	}
 	file, err := os.OpenFile(logFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file '%s' fail: %v", logFile, err)
 	}
 	f.SetOutPut(file)
 	return nil
 }
 
-func (f *fileLogging) logWriter() error {
+func (f *fileLogging) logSplit() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if err := f.splitOnce(); err != nil {
+				fmt.Printf("%v", err)
+				f.Error(err)
+			}
+		}
+	}
+}
+func (f *fileLogging) splitOnce() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	defer func() {
+		if err := recover(); err != nil {
+			f.Errorf("log writer panic: %v\n", err)
+		}
+	}()
 	logFile := joinFilePath(f.fileDir, f.fileName)
-	if fileSize(logFile) >= f.maxSize*1024*1024 {
+	fileSize := fileSize(logFile)
+	if fileSize >= f.maxSize {
 		f.fileName = generateFileName(f.prefix)
 		logFile := joinFilePath(f.fileDir, f.fileName)
-		if !isExist(logFile) {
+		if !isExist(f.fileDir) {
 			if err := os.Mkdir(f.fileDir, 0755); err != nil {
 				return err
 			}
@@ -90,107 +149,50 @@ func (f *fileLogging) logWriter() error {
 	}
 	return nil
 }
+
 func (f *fileLogging) logDelete() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	ticker := time.NewTicker(5 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if err := f.deleteOnce(); err != nil {
+				fmt.Printf("%v", err)
+				f.Error(err)
+			}
+		}
+	}
 
 }
 
-// // init filelogger split by fileSize
-// func (f *fileLogging) initLoggerBySize() {
+func (f *fileLogging) deleteOnce() error {
+	defer func() {
+		if err := recover(); err != nil {
+			f.Errorf("delete file once panic: %v\n", err)
+		}
+	}()
 
-// 	f.mu.Lock()
-// 	defer f.mu.Unlock()
+	files, err := ioutil.ReadDir(f.fileDir)
+	if err != nil {
+		return err
+	}
 
-// 	logFile := joinFilePath(f.fileDir, f.fileName)
-// 	for i := 1; i <= f.fileCount; i++ {
-// 		if !isExist(logFile + "." + strconv.Itoa(i)) {
-// 			break
-// 		}
-
-// 		f.suffix = i
-// 	}
-
-// 	if !f.isMustSplit() {
-// 		if !isExist(f.fileDir) {
-// 			os.Mkdir(f.fileDir, 0755)
-// 		}
-// 		f.logFile, _ = os.OpenFile(logFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
-// 		f.lg = log.New(f.logFile, f.prefix, log.LstdFlags|log.Lmicroseconds)
-// 	} else {
-// 		f.split()
-// 	}
-
-// 	go f.logWriter()
-// 	go f.fileMonitor()
-// }
-
-// // used for determine the fileLogger f is time to split.
-// // size: once the current fileLogger's fileSize >= config.fileSize need to split
-// // daily: once the current fileLogger stands for yesterday need to split
-// func (f *fileLogging) isMustSplit() bool {
-
-// 	logFile := joinFilePath(f.fileDir, f.fileName)
-// 	if f.fileCount > 1 {
-// 		if fileSize(logFile) >= f.fileSize {
-// 			return true
-// 		}
-// 	}
-
-// 	return false
-// }
-
-// // Split fileLogger
-// func (f *fileLogging) split() {
-
-// 	logFile := joinFilePath(f.fileDir, f.fileName)
-
-// 	f.suffix = int(f.suffix%f.fileCount + 1)
-// 	if f.logFile != nil {
-// 		f.logFile.Close()
-// 	}
-
-// 	logFileBak := logFile + "." + strconv.Itoa(f.suffix)
-// 	if isExist(logFileBak) {
-// 		os.Remove(logFileBak)
-// 	}
-// 	os.Rename(logFile, logFileBak)
-
-// 	f.logFile, _ = os.Create(logFile)
-// 	f.lg = log.New(f.logFile, f.prefix, log.LstdFlags|log.Lmicroseconds)
-
-// }
-
-// // After some interval time, goto check the current fileLogger's size or date
-// func (f *fileLogging) fileMonitor() {
-// 	defer func() {
-// 		if err := recover(); err != nil {
-// 			f.lg.Printf("FileLogger's FileMonitor() catch panic: %v\n", err)
-// 		}
-// 	}()
-
-// 	//TODO  load logScan interval from config file
-// 	logScan := DEFAULT_LOG_SCAN
-
-// 	timer := time.NewTicker(time.Duration(logScan) * time.Second)
-// 	for {
-// 		select {
-// 		case <-timer.C:
-// 			f.fileCheck()
-// 		}
-// 	}
-// }
-
-// // If the current fileLogger need to split, just split
-// func (f *fileLogging) fileCheck() {
-// 	defer func() {
-// 		if err := recover(); err != nil {
-// 			f.lg.Printf("FileLogger's FileCheck() catch panic: %v\n", err)
-// 		}
-// 	}()
-
-// 	if f.isMustSplit() {
-// 		f.mu.Lock()
-// 		defer f.mu.Unlock()
-
-// 		f.split()
-// 	}
-// }
+	for _, file := range files {
+		now := time.Now().Unix()
+		modify := file.ModTime().Unix()
+		if now-modify > f.maxHour*60*60 {
+			continue
+		}
+		express := fmt.Sprintf(`%s_\d{8}_\d{4}`, f.prefix)
+		reg := regexp.MustCompile(express)
+		fileName := file.Name()
+		if reg.Match([]byte(fileName)) {
+			if err := os.Remove(joinFilePath(f.fileDir, file.Name())); err != nil {
+				return fmt.Errorf("delete file '%s' err:%v", file.Name(), err)
+			}
+		}
+	}
+	return nil
+}

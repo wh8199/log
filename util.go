@@ -65,6 +65,6 @@ func shortFileName(file string) string {
 
 func generateFileName(prefix string) string {
 	current := time.Now()
-	format := fmt.Sprintf("%s_2006-01-02_15-04.log", prefix)
+	format := fmt.Sprintf("%s_20060102_1504.log", prefix)
 	return current.Format(format)
 }
