@@ -1,26 +1,29 @@
 package log
 
 import (
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 )
 
-func TestNewFileLogging1(t *testing.T) {
+func TestNewFileLogging(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	SetLogConfig(true, "", "", 0, 0)
-	globalConfig.Start()
-	logfile := NewLogging("test", INFO_LEVEL, 2)
-	go func() {
-		ticker := time.NewTicker(50 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				logfile.Info("test write log")
+
+	for i := 0; i < 1000; i++ {
+		go func(i int) {
+			logfile := NewLogging("test"+strconv.Itoa(i), INFO_LEVEL, 2)
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for {
+				<-ticker.C
+				logfile.Info(" ---------test write log----------")
+
 			}
-		}
-	}()
+		}(i)
+	}
+	globalConfig.Start()
 	wg.Wait()
 }

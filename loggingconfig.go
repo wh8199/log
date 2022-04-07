@@ -18,21 +18,12 @@ type logConfig struct {
 	isFile      bool
 	fileDir     string
 	maxSize     int64
-	maxHour     int64
+	maxSecond   int64
 	prefix      string             //prefix used to generate log file names
 	observers   []LoggingInterface //Using the observer pattern
 	observersMu sync.Mutex
 	file        *os.File     //The current output file of the log. Since multiple goroutines share this resource, a read-write lock needs to be added.
 	fileMu      sync.RWMutex //Used to protect mutually exclusive resources file
-}
-
-func init() {
-	globalConfig = &logConfig{
-		isFile:      false,
-		observers:   make([]LoggingInterface, 0, 1000),
-		observersMu: sync.Mutex{},
-		fileMu:      sync.RWMutex{},
-	}
 }
 
 //the fileDir is the log save path, default value is current path
@@ -41,22 +32,31 @@ func init() {
 //
 //the maxSize default is 20,unit is MB
 //
-//the maxHour is hours for log retention, after which it will be automatically deleted
-func SetLogConfig(isFile bool, fileDir, prefix string, maxSize, maxHour int) {
+//the maxSecond is hours for log retention, after which it will be automatically deleted
+func SetLogConfig(isFile bool, fileDir, prefix string, maxSize, maxSecond int) {
 	globalConfig.isFile = true
 	if fileDir == "" {
-		fileDir = getCurrentPath()
+		globalConfig.fileDir = getCurrentPath()
 	}
 	if prefix == "" {
-		prefix = "log"
+		globalConfig.prefix = "log"
 	}
 	if maxSize < 20 {
-		maxSize = 20
+		globalConfig.maxSize = 20
 	}
-	if maxHour < 1 {
-		maxHour = 1
+	if maxSecond < 1 {
+		globalConfig.maxSecond = 1
 	}
-	maxSize = maxSize << 20 //MB
+	globalConfig.maxSize = globalConfig.maxSize << 20 //MB
+
+	for {
+		if err := globalConfig.initLogFile(); err != nil {
+			log.Print(err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		break
+	}
 }
 
 //attach observer
@@ -104,15 +104,6 @@ func (f *logConfig) Start() {
 	if !f.isFile {
 		return
 	}
-	for {
-		if err := f.initLogFile(); err != nil {
-			log.Print(err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-		break
-	}
-
 	go f.logSplit()
 	go f.logDelete()
 }
@@ -137,7 +128,11 @@ func (f *logConfig) initLogFile() error {
 	}
 	f.fileMu.Lock()
 	f.file = file
-	f.Notify()
+	//This method is not called during log initialization,
+	//because during log initialization,
+	//there is no guarantee that all log objects have been registered in the observer registry.
+	//You should check the configuration during initialization to see if the file is empty
+	//f.Notify()
 	f.fileMu.Unlock()
 	return nil
 }
@@ -146,12 +141,11 @@ func (f *logConfig) logSplit() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
-		select {
-		case <-ticker.C:
-			if err := f.splitOnce(); err != nil {
-				log.Printf("%v", err)
-			}
+		<-ticker.C
+		if err := f.splitOnce(); err != nil {
+			log.Printf("%v", err)
 		}
+
 	}
 }
 func (f *logConfig) splitOnce() error {
@@ -188,14 +182,12 @@ func (f *logConfig) splitOnce() error {
 }
 
 func (f *logConfig) logDelete() {
-	ticker := time.NewTicker(5 * time.Hour)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
-		select {
-		case <-ticker.C:
-			if err := f.deleteOnce(); err != nil {
-				log.Printf("%v", err)
-			}
+		<-ticker.C
+		if err := f.deleteOnce(); err != nil {
+			log.Printf("%v", err)
 		}
 	}
 
@@ -227,7 +219,7 @@ func (f *logConfig) deleteOnce() error {
 		}
 		now := time.Now().Unix()
 		modify := fi.ModTime().Unix()
-		if now-modify > globalConfig.maxHour*60*60 {
+		if now-modify > globalConfig.maxSecond {
 			continue
 		}
 		express := fmt.Sprintf(`%s_\d{8}_\d{4}`, globalConfig.prefix)
