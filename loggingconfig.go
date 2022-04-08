@@ -32,7 +32,7 @@ type logConfig struct {
 //
 //the maxSize default is 20,unit is MB
 //
-//the maxSecond is hours for log retention, after which it will be automatically deleted
+//the maxSecond is seconds for log retention, after which it will be automatically deleted
 func SetLogConfig(isFile bool, fileDir, prefix string, maxSize, maxSecond int) {
 	globalConfig.isFile = true
 	if fileDir == "" {
@@ -85,7 +85,8 @@ func (f *logConfig) Detach(observer LoggingInterface) {
 	}
 }
 
-//notify observer,this method is not thread safe and needs to be explicitly locked when called
+//notify observer,this method is not thread safe
+//and needs to be explicitly locked when called
 func (f *logConfig) Notify() {
 	if !f.isFile {
 		return
@@ -153,7 +154,7 @@ func (f *logConfig) splitOnce() error {
 	defer f.fileMu.Unlock()
 	defer func() {
 		if err := recover(); err != nil {
-			log.Printf("log writer panic: %v\n", err)
+			log.Printf("log split panic: %v\n", err)
 		}
 	}()
 
@@ -161,41 +162,44 @@ func (f *logConfig) splitOnce() error {
 	if err != nil {
 		return err
 	}
-	if fi.Size() >= globalConfig.maxSize {
-		fileName := generateFileName(globalConfig.prefix)
-		logFile := joinFilePath(globalConfig.fileDir, fileName)
-		if !isExist(globalConfig.fileDir) {
-			if err := os.Mkdir(globalConfig.fileDir, 0755); err != nil {
-				return err
-			}
-		}
-		file, err := os.OpenFile(logFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
-		if err != nil {
-			return err
-		}
-		f.file.Close()
-		f.file = file
-		f.Notify()
+	diff := fi.Size() - globalConfig.maxSize
+	if diff < 0 {
 		return nil
 	}
+	fileName := generateFileName(globalConfig.prefix)
+	logFile := joinFilePath(globalConfig.fileDir, fileName)
+	if !isExist(globalConfig.fileDir) {
+		if err := os.Mkdir(globalConfig.fileDir, 0755); err != nil {
+			return err
+		}
+	}
+	file, err := os.OpenFile(logFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+	f.file.Close()
+	f.file = file
+	f.Notify()
 	return nil
 }
 
 func (f *logConfig) logDelete() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
+	express := fmt.Sprintf(`%s_\d{8}_\d{4}`, globalConfig.prefix)
+	reg := regexp.MustCompile(express)
 	for {
 		<-ticker.C
-		if err := f.deleteOnce(); err != nil {
+		if err := f.deleteOnce(reg); err != nil {
 			log.Printf("%v", err)
 		}
 	}
 
 }
 
-func (f *logConfig) deleteOnce() error {
+func (f *logConfig) deleteOnce(reg *regexp.Regexp) error {
 	f.fileMu.RLock()
-	defer f.fileMu.Unlock()
+	defer f.fileMu.RUnlock()
 	defer func() {
 		if err := recover(); err != nil {
 			log.Printf("delete file once panic: %v\n", err)
@@ -212,24 +216,25 @@ func (f *logConfig) deleteOnce() error {
 		return err
 	}
 	currFileName := fi.Name()
-
 	for _, fi := range fis {
 		if fi.Name() == currFileName {
 			continue
 		}
-		now := time.Now().Unix()
-		modify := fi.ModTime().Unix()
-		if now-modify > globalConfig.maxSecond {
+		fileName := fi.Name()
+		if !reg.Match([]byte(fileName)) {
 			continue
 		}
-		express := fmt.Sprintf(`%s_\d{8}_\d{4}`, globalConfig.prefix)
-		reg := regexp.MustCompile(express)
-		fileName := fi.Name()
-		if reg.Match([]byte(fileName)) {
-			if err := os.Remove(joinFilePath(globalConfig.fileDir, fi.Name())); err != nil {
-				return fmt.Errorf("delete file '%s' err:%v", fi.Name(), err)
-			}
+		now := time.Now().Unix()
+		modify := fi.ModTime().Unix()
+		diff := now - modify
+		if diff < globalConfig.maxSecond {
+			continue
 		}
+		filename := joinFilePath(globalConfig.fileDir, fi.Name())
+		if err := os.Remove(filename); err != nil {
+			return fmt.Errorf("delete file '%s' err:%v", fi.Name(), err)
+		}
+
 	}
 	return nil
 }
