@@ -15,15 +15,17 @@ var (
 )
 
 type logConfig struct {
-	isFile      bool
-	fileDir     string
-	maxSize     int64
-	maxSecond   int64
-	prefix      string             //prefix used to generate log file names
-	observers   []LoggingInterface //Using the observer pattern
-	observersMu sync.Mutex
-	file        *os.File     //The current output file of the log. Since multiple goroutines share this resource, a read-write lock needs to be added.
-	fileMu      sync.RWMutex //Used to protect mutually exclusive resources file
+	isFile         bool
+	fileDir        string
+	maxSize        int64
+	deleteDuration time.Duration
+	maxSecond      int64
+	splitDuration  time.Duration
+	prefix         string             //prefix used to generate log file names
+	observers      []LoggingInterface //Using the observer pattern
+	observersMu    sync.Mutex
+	file           *os.File     //The current output file of the log. Since multiple goroutines share this resource, a read-write lock needs to be added.
+	fileMu         sync.RWMutex //Used to protect mutually exclusive resources file
 }
 
 //the fileDir is the log save path, default value is current path
@@ -33,7 +35,7 @@ type logConfig struct {
 //the maxSize default is 20,unit is MB
 //
 //the maxSecond is seconds for log retention, after which it will be automatically deleted
-func SetLogConfig(isFile bool, fileDir, prefix string, maxSize, maxSecond int) {
+func SetLogConfig(isFile bool, fileDir, prefix, splitDurationStr, deleteDurationStr string, maxSize, maxSecond int) error {
 	globalConfig.isFile = true
 	if fileDir == "" {
 		globalConfig.fileDir = getCurrentPath()
@@ -48,15 +50,29 @@ func SetLogConfig(isFile bool, fileDir, prefix string, maxSize, maxSecond int) {
 		globalConfig.maxSecond = 1
 	}
 	globalConfig.maxSize = globalConfig.maxSize << 20 //MB
-
-	for {
-		if err := globalConfig.initLogFile(); err != nil {
-			log.Print(err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-		break
+	if splitDurationStr == "" {
+		splitDurationStr = "5s"
 	}
+	if deleteDurationStr == "" {
+		deleteDurationStr = "5s"
+	}
+
+	splitDuration, err := time.ParseDuration(splitDurationStr)
+	if err != nil {
+		return err
+	}
+	globalConfig.splitDuration = splitDuration
+
+	deleteDuration, err := time.ParseDuration(deleteDurationStr)
+	if err != nil {
+		return err
+	}
+	globalConfig.deleteDuration = deleteDuration
+
+	if err := globalConfig.initLogFile(); err != nil {
+		return err
+	}
+	return nil
 }
 
 //attach observer
@@ -138,13 +154,14 @@ func (f *logConfig) initLogFile() error {
 	return nil
 }
 
-func (f *logConfig) logSplit() {
-	ticker := time.NewTicker(1 * time.Second)
+func (f *logConfig) logSplit() error {
+	ticker := time.NewTicker(f.splitDuration)
 	defer ticker.Stop()
 	for {
 		<-ticker.C
 		if err := f.splitOnce(); err != nil {
 			log.Printf("%v", err)
+			return err
 		}
 
 	}
@@ -184,7 +201,7 @@ func (f *logConfig) splitOnce() error {
 }
 
 func (f *logConfig) logDelete() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(f.deleteDuration)
 	defer ticker.Stop()
 	express := fmt.Sprintf(`%s_\d{8}_\d{4}`, globalConfig.prefix)
 	reg := regexp.MustCompile(express)

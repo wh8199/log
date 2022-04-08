@@ -10,7 +10,7 @@ import (
 func TestFileLoggingUse(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	SetLogConfig(true, "", "", 0, 0)
+	SetLogConfig(true, "", "", "1s", "1s", 0, 0)
 	globalConfig.Start()
 	for i := 0; i < 9000; i++ {
 		go func(i int) {
