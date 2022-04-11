@@ -28,6 +28,10 @@ type logConfig struct {
 	fileMu         sync.RWMutex //Used to protect mutually exclusive resources file
 }
 
+func SetDefaultLogConfig(isFile bool) error {
+	return SetLogConfig(isFile, "", "", "", "", 0, 0)
+}
+
 //the fileDir is the log save path, default value is current path
 //
 //the prefix is generated log filename prefix, the default value is log
