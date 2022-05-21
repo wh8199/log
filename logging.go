@@ -57,7 +57,7 @@ func NewLogging(name string, level LoggingLevel, callerLevel int) LoggingInterfa
 		level = INFO_LEVEL
 	}
 
-	return &logging{
+	logging := &logging{
 		Name:         name,
 		Level:        level,
 		Out:          os.Stdout,
@@ -66,6 +66,13 @@ func NewLogging(name string, level LoggingLevel, callerLevel int) LoggingInterfa
 		CallerLevel:  callerLevel,
 		Formater:     DefaultFormater,
 	}
+	//check globalConfig file is or not nil
+	if globalConfig.file != nil {
+		logging.SetOutPut(globalConfig.file)
+	}
+	globalConfig.Attach(logging)
+
+	return logging
 }
 
 func NewLoggingWithFormater(name string, level LoggingLevel, callerLevel int, formater Formatter) LoggingInterface {
@@ -73,7 +80,7 @@ func NewLoggingWithFormater(name string, level LoggingLevel, callerLevel int, fo
 		level = INFO_LEVEL
 	}
 
-	return &logging{
+	logging := &logging{
 		Name:         name,
 		Level:        level,
 		Out:          os.Stdout,
@@ -82,6 +89,13 @@ func NewLoggingWithFormater(name string, level LoggingLevel, callerLevel int, fo
 		CallerLevel:  callerLevel,
 		Formater:     formater,
 	}
+	//Check golbal file is or not  empty, not empty Change the output object at init logging
+	if globalConfig.file != nil {
+		logging.SetOutPut(globalConfig.file)
+	}
+	globalConfig.Attach(logging)
+
+	return logging
 }
 
 type logging struct {
