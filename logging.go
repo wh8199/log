@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 )
 
 type LoggingInterface interface {
@@ -66,10 +67,12 @@ func NewLogging(name string, level LoggingLevel, callerLevel int) LoggingInterfa
 		CallerLevel:  callerLevel,
 		Formater:     DefaultFormater,
 	}
+
 	//check globalConfig file is or not nil
 	if globalConfig.file != nil {
 		logging.SetOutPut(globalConfig.file)
 	}
+
 	globalConfig.Attach(logging)
 
 	return logging
@@ -93,12 +96,15 @@ func NewLoggingWithFormater(name string, level LoggingLevel, callerLevel int, fo
 	if globalConfig.file != nil {
 		logging.SetOutPut(globalConfig.file)
 	}
+
 	globalConfig.Attach(logging)
 
 	return logging
 }
 
 type logging struct {
+	mux sync.Mutex
+
 	Name         string
 	Level        LoggingLevel
 	Out          io.Writer
@@ -109,17 +115,26 @@ type logging struct {
 }
 
 func (l *logging) Close() {
+	l.mux.Lock()
+	defer l.mux.Unlock()
 	if closer, ok := l.Out.(io.WriteCloser); ok {
 		closer.Close()
 	}
 }
 
 func (l *logging) SetOutPut(w io.Writer) {
+	l.mux.Lock()
+	defer l.mux.Unlock()
 	l.Out = w
 }
 
 func (l *logging) Write(buf *bytes.Buffer) {
-	l.Out.Write(buf.Bytes())
+	l.mux.Lock()
+	defer l.mux.Unlock()
+	if _, err := l.Out.Write(buf.Bytes()); err != nil {
+		panic(err)
+	}
+
 	l.Pool.Put(buf)
 }
 
