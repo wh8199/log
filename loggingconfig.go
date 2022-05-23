@@ -21,15 +21,32 @@ type logConfig struct {
 	deleteDuration time.Duration
 	maxSecond      int64
 	splitDuration  time.Duration
-	prefix         string             //prefix used to generate log file names
-	observers      []LoggingInterface //Using the observer pattern
-	observersMu    sync.Mutex
-	file           *os.File     //The current output file of the log. Since multiple goroutines share this resource, a read-write lock needs to be added.
-	fileMu         sync.RWMutex //Used to protect mutually exclusive resources file
+	//prefix used to generate log file names
+	prefix string
+	//Using the observer pattern
+	observers   []LoggingInterface
+	observersMu sync.Mutex
+	//The current output file of the log. Since multiple goroutines share this resource, a read-write lock needs to be added.
+	file *os.File
+	//Used to protect mutually exclusive resources file
+	fileMu sync.RWMutex
+	//stop channel
+	exitChan chan struct{}
 }
 
 func SetDefaultLogConfig(isFile bool) error {
 	return SetLogConfig(isFile, "", "", "", "", 0, 0)
+}
+
+func NewDefaultConfig() *logConfig {
+	return &logConfig{
+		isFile:         false,
+		fileDir:        getCurrentPath(),
+		maxSize:        20,
+		maxSecond:      1,
+		splitDuration:  5 * time.Second,
+		deleteDuration: 5 * time.Second,
+	}
 }
 
 //the fileDir is the log save path, default value is current path
@@ -76,7 +93,14 @@ func SetLogConfig(isFile bool, fileDir, prefix, splitDurationStr, deleteDuration
 	if err := globalConfig.initLogFile(); err != nil {
 		return err
 	}
+
+	globalConfig.exitChan = make(chan struct{})
 	return nil
+}
+
+func (f *logConfig) SetFile() *logConfig {
+	f.isFile = true
+	return f
 }
 
 //attach observer
@@ -111,6 +135,7 @@ func (f *logConfig) Notify() {
 	if !f.isFile {
 		return
 	}
+
 	for _, observer := range f.observers {
 		observer.SetOutPut(f.file)
 	}
@@ -121,12 +146,24 @@ func Start() {
 	globalConfig.Start()
 }
 
+func Stop() {
+	globalConfig.Stop()
+}
+
 func (f *logConfig) Start() {
 	if !f.isFile {
 		return
 	}
-	go f.logSplit()
-	go f.logDelete()
+
+	go f.start()
+}
+
+func (f *logConfig) Stop() {
+	if !f.isFile {
+		return
+	}
+
+	f.exitChan <- struct{}{}
 }
 
 func (f *logConfig) initLogFile() error {
@@ -135,7 +172,9 @@ func (f *logConfig) initLogFile() error {
 			log.Printf("init log file  panic: %v\n", err)
 		}
 	}()
+
 	fileName := generateFileName(globalConfig.prefix)
+
 	logFile := joinFilePath(globalConfig.fileDir, fileName)
 	if !isExist(globalConfig.fileDir) {
 		if err := os.Mkdir(globalConfig.fileDir, 0755); err != nil {
@@ -158,21 +197,42 @@ func (f *logConfig) initLogFile() error {
 	return nil
 }
 
-func (f *logConfig) logSplit() error {
-	ticker := time.NewTicker(f.splitDuration)
-	defer ticker.Stop()
-	for {
-		<-ticker.C
-		if err := f.splitOnce(); err != nil {
-			log.Printf("%v", err)
-			return err
-		}
+func (f *logConfig) start() {
+	splitTicker := time.NewTicker(f.splitDuration)
+	defer splitTicker.Stop()
 
+	deleteTicker := time.NewTicker(f.deleteDuration)
+	defer deleteTicker.Stop()
+	express := fmt.Sprintf(`%s_\d{8}_\d{4}`, globalConfig.prefix)
+	reg := regexp.MustCompile(express)
+
+	for {
+		select {
+		case <-splitTicker.C:
+			if err := f.splitOnce(); err != nil {
+				log.Fatalf("split log failed, %v", err)
+			}
+		case <-deleteTicker.C:
+			if err := f.deleteOnce(reg); err != nil {
+				log.Fatalf("delete log failed, %v", err)
+			}
+		case <-f.exitChan:
+			f.observersMu.Lock()
+
+			for _, observer := range f.observers {
+				observer.Close()
+			}
+
+			f.observersMu.Unlock()
+			return
+		}
 	}
 }
+
 func (f *logConfig) splitOnce() error {
 	f.fileMu.Lock()
 	defer f.fileMu.Unlock()
+
 	defer func() {
 		if err := recover(); err != nil {
 			log.Printf("log split panic: %v\n", err)
@@ -183,10 +243,12 @@ func (f *logConfig) splitOnce() error {
 	if err != nil {
 		return err
 	}
+
 	diff := fi.Size() - globalConfig.maxSize
 	if diff < 0 {
 		return nil
 	}
+
 	fileName := generateFileName(globalConfig.prefix)
 	logFile := joinFilePath(globalConfig.fileDir, fileName)
 	if !isExist(globalConfig.fileDir) {
@@ -194,28 +256,17 @@ func (f *logConfig) splitOnce() error {
 			return err
 		}
 	}
+
 	file, err := os.OpenFile(logFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}
-	f.file.Close()
+
+	oldFile := f.file
 	f.file = file
 	f.Notify()
-	return nil
-}
 
-func (f *logConfig) logDelete() {
-	ticker := time.NewTicker(f.deleteDuration)
-	defer ticker.Stop()
-	express := fmt.Sprintf(`%s_\d{8}_\d{4}`, globalConfig.prefix)
-	reg := regexp.MustCompile(express)
-	for {
-		<-ticker.C
-		if err := f.deleteOnce(reg); err != nil {
-			log.Printf("%v", err)
-		}
-	}
-
+	return oldFile.Close()
 }
 
 func (f *logConfig) deleteOnce(reg *regexp.Regexp) error {
