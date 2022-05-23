@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"strconv"
 )
 
 var (
@@ -27,13 +28,20 @@ func globalLogFormatter(name string, level LoggingLevel, callerLevel int, pool *
 	}
 
 	time := CacheTime()
-
 	_, caller, line, _ := runtime.Caller(callerLevel)
 
-	result := fmt.Sprintf("%s %s:%d %v msg: %s\n", time, caller, line, level, s)
-
 	buf := pool.Get()
-	buf.WriteString(result)
+	buf.Reset()
+	buf.WriteString(time)
+	buf.WriteString(" ")
+	buf.WriteString(caller)
+	buf.WriteString(":")
+	buf.WriteString(strconv.Itoa(line))
+	buf.WriteString(" ")
+	buf.WriteString(level.String())
+	buf.WriteString(" msg: ")
+	buf.WriteString(s)
+	buf.WriteString("\n")
 
 	return buf
 }

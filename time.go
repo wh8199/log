@@ -8,6 +8,8 @@ import (
 
 var (
 	lastTime atomic.Value
+
+	pool *BufferPool = NewBufferPool()
 )
 
 type timeCache struct {
@@ -32,6 +34,14 @@ func CacheTime() string {
 		lastTime.Store(&timeCache{now, s})
 	}
 	mi := nano % 1e9 / 1e6
-	s = s + "," + strconv.Itoa(int(mi))
-	return s
+
+	buf := pool.Get()
+	defer pool.Put(buf)
+
+	buf.Reset()
+	buf.WriteString(s)
+	buf.WriteString(",")
+	buf.WriteString(strconv.Itoa(int(mi)))
+
+	return buf.String()
 }
