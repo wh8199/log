@@ -9,7 +9,8 @@ func init() {
 		observersMu: sync.Mutex{},
 		fileMu:      sync.RWMutex{},
 	}
-}
-func init() {
+
 	logger = NewLoggingWithFormater("global", INFO_LEVEL, 3, globalLogFormatter)
+
+	globalConfig.Attach(logger)
 }
