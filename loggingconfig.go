@@ -117,9 +117,9 @@ func (f *logConfig) Detach(observer LoggingInterface) {
 	for i := 0; i < len(f.observers); {
 		if f.observers[i] == observer {
 			f.observers = append(f.observers[:i], f.observers[i+1:]...)
-		} else {
-			i++
+			continue
 		}
+		i++
 	}
 }
 
