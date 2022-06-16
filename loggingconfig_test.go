@@ -24,6 +24,6 @@ func TestFileLoggingUse(t *testing.T) {
 			}
 		}(i)
 	}
-
+	Notify()
 	wg.Wait()
 }
