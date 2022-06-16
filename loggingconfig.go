@@ -123,6 +123,7 @@ func (f *logConfig) Detach(observer LoggingInterface) {
 	}
 }
 
+//It is recommended to call this method on the last line of the main function, in order to notify all observers
 func Notify() {
 	globalConfig.Notify()
 }
