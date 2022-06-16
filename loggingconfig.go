@@ -142,7 +142,6 @@ func (f *logConfig) Notify() {
 
 //Enable log write to file mode
 func Start() {
-	globalConfig.Notify()
 	globalConfig.Start()
 }
 
