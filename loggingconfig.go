@@ -107,9 +107,6 @@ func (f *logConfig) SetFile() *logConfig {
 func (f *logConfig) Attach(observer LoggingInterface) {
 	f.observersMu.Lock()
 	defer f.observersMu.Unlock()
-	if !f.isFile {
-		return
-	}
 	f.observers = append(f.observers, observer)
 }
 
@@ -117,9 +114,6 @@ func (f *logConfig) Attach(observer LoggingInterface) {
 func (f *logConfig) Detach(observer LoggingInterface) {
 	f.observersMu.Lock()
 	defer f.observersMu.Unlock()
-	if !f.isFile {
-		return
-	}
 	for i := 0; i < len(f.observers); {
 		if f.observers[i] == observer {
 			f.observers = append(f.observers[:i], f.observers[i+1:]...)
@@ -127,6 +121,10 @@ func (f *logConfig) Detach(observer LoggingInterface) {
 			i++
 		}
 	}
+}
+
+func Notify() {
+	globalConfig.Notify()
 }
 
 //notify observer,this method is not thread safe
