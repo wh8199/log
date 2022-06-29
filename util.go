@@ -8,9 +8,9 @@ import (
 )
 
 // Get current path
-func getCurrentPath() string {
-	absPath, _ := filepath.Abs(filepath.Dir(os.Args[0]))
-	return absPath
+func getCurrentPath() (string, error) {
+	absPath, error := filepath.Abs(filepath.Dir(os.Args[0]))
+	return absPath, error
 }
 
 // Determine a file or a path exists in the os
