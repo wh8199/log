@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"reflect"
 	"regexp"
 	"sync"
 	"time"
@@ -34,21 +35,6 @@ type logConfig struct {
 	exitChan chan struct{}
 }
 
-func SetDefaultLogConfig(isFile bool) error {
-	return SetLogConfig(isFile, "", "", "", "", 0, 0)
-}
-
-func NewDefaultConfig() *logConfig {
-	return &logConfig{
-		isFile:         false,
-		fileDir:        getCurrentPath(),
-		maxSize:        20,
-		maxSecond:      1,
-		splitDuration:  5 * time.Second,
-		deleteDuration: 5 * time.Second,
-	}
-}
-
 //the fileDir is the log save path, default value is current path
 //
 //the prefix is generated log filename prefix, the default value is log
@@ -56,51 +42,56 @@ func NewDefaultConfig() *logConfig {
 //the maxSize default is 20,unit is MB
 //
 //the maxSecond is seconds for log retention, after which it will be automatically deleted
-func SetLogConfig(isFile bool, fileDir, prefix, splitDurationStr, deleteDurationStr string, maxSize, maxSecond int) error {
-	globalConfig.isFile = true
-	if fileDir == "" {
-		globalConfig.fileDir = getCurrentPath()
+func BuildLogConfig(isFile bool, fileDir, prefix, splitDurationStr, deleteDurationStr string, maxSize, maxSecond int) error {
+	globalConfig.isFile = isFile
+	path, err := getCurrentPath()
+	if err != nil {
+		return err
 	}
-	if prefix == "" {
-		globalConfig.prefix = "log"
+	globalConfig.fileDir = path
+	if isFile {
+		if err := globalConfig.initLogFile(); err != nil {
+			return err
+		}
 	}
-	if maxSize < 20 {
-		globalConfig.maxSize = 20
+
+	if fileDir != "" {
+		globalConfig.fileDir = fileDir
 	}
-	if maxSecond < 1 {
-		globalConfig.maxSecond = 1
+
+	if prefix != "" {
+		globalConfig.prefix = prefix
 	}
+	if maxSize > 20 {
+		globalConfig.maxSize = int64(maxSize)
+	}
+	if maxSecond > 5 {
+		globalConfig.maxSecond = int64(maxSecond)
+	}
+
 	globalConfig.maxSize = globalConfig.maxSize << 20 //MB
-	if splitDurationStr == "" {
-		splitDurationStr = "5s"
-	}
-	if deleteDurationStr == "" {
-		deleteDurationStr = "5s"
+
+	globalConfig.splitDuration = time.Second * 5
+	if splitDurationStr != "" {
+		splitDuration, err := time.ParseDuration(splitDurationStr)
+		if err != nil {
+			return err
+		}
+		globalConfig.splitDuration = splitDuration
 	}
 
-	splitDuration, err := time.ParseDuration(splitDurationStr)
-	if err != nil {
-		return err
-	}
-	globalConfig.splitDuration = splitDuration
-
-	deleteDuration, err := time.ParseDuration(deleteDurationStr)
-	if err != nil {
-		return err
-	}
-	globalConfig.deleteDuration = deleteDuration
-
-	if err := globalConfig.initLogFile(); err != nil {
-		return err
+	globalConfig.deleteDuration = time.Second * 5
+	if deleteDurationStr != "" {
+		deleteDuration, err := time.ParseDuration(deleteDurationStr)
+		if err != nil {
+			return err
+		}
+		globalConfig.deleteDuration = deleteDuration
 	}
 
 	globalConfig.exitChan = make(chan struct{})
-	return nil
-}
 
-func (f *logConfig) SetFile() *logConfig {
-	f.isFile = true
-	return f
+	return nil
 }
 
 //attach observer
@@ -115,7 +106,8 @@ func (f *logConfig) Detach(observer LoggingInterface) {
 	f.observersMu.Lock()
 	defer f.observersMu.Unlock()
 	for i := 0; i < len(f.observers); {
-		if f.observers[i] == observer {
+		//Compare if it is the same object
+		if reflect.DeepEqual(f.observers[i], observer) {
 			f.observers = append(f.observers[:i], f.observers[i+1:]...)
 			continue
 		}
