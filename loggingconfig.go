@@ -43,17 +43,6 @@ type logConfig struct {
 //
 //the maxSecond is seconds for log retention, after which it will be automatically deleted
 func BuildLogConfig(isFile bool, fileDir, prefix, splitDurationStr, deleteDurationStr string, maxSize, maxSecond int) error {
-	globalConfig.isFile = isFile
-	path, err := getCurrentPath()
-	if err != nil {
-		return err
-	}
-	globalConfig.fileDir = path
-	if isFile {
-		if err := globalConfig.initLogFile(); err != nil {
-			return err
-		}
-	}
 
 	if fileDir != "" {
 		globalConfig.fileDir = fileDir
@@ -89,6 +78,17 @@ func BuildLogConfig(isFile bool, fileDir, prefix, splitDurationStr, deleteDurati
 		globalConfig.deleteDuration = deleteDuration
 	}
 
+	globalConfig.isFile = isFile
+	path, err := getCurrentPath()
+	if err != nil {
+		return err
+	}
+	globalConfig.fileDir = path
+	if isFile {
+		if err := globalConfig.initLogFile(); err != nil {
+			return err
+		}
+	}
 	globalConfig.exitChan = make(chan struct{})
 
 	return nil
@@ -179,11 +179,8 @@ func (f *logConfig) initLogFile() error {
 	}
 	f.fileMu.Lock()
 	f.file = file
-	//This method is not called during log initialization,
-	//because during log initialization,
-	//there is no guarantee that all log objects have been registered in the observer registry.
-	//You should check the configuration during initialization to see if the file is empty
-	//f.Notify()
+	//Used to modify the log object during initialization to modify its path
+	f.Notify()
 	f.fileMu.Unlock()
 	return nil
 }
