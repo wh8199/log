@@ -7,9 +7,9 @@ import (
 	"strconv"
 )
 
-type Formatter func(name string, level LoggingLevel, callerLevel int, pool *BufferPool, format string, args ...interface{}) *bytes.Buffer
+type Formatter func(level LoggingLevel, callerLevel int, pool *BufferPool, module, format string, args ...interface{}) *bytes.Buffer
 
-func DefaultFormater(name string, level LoggingLevel, callerLevel int, pool *BufferPool, format string, args ...interface{}) *bytes.Buffer {
+func DefaultFormater(level LoggingLevel, callerLevel int, pool *BufferPool, module, format string, args ...interface{}) *bytes.Buffer {
 	var (
 		s string
 	)
@@ -26,9 +26,12 @@ func DefaultFormater(name string, level LoggingLevel, callerLevel int, pool *Buf
 	buf := pool.Get()
 	buf.Reset()
 
-	buf.WriteString("[ ")
-	buf.WriteString(name)
-	buf.WriteString(" ] ")
+	if len(module) != 0 {
+		buf.WriteString("[ ")
+		buf.WriteString(module)
+		buf.WriteString(" ] ")
+	}
+
 	buf.WriteString(time)
 	buf.WriteString(" ")
 	buf.WriteString(caller)

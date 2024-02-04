@@ -19,6 +19,5 @@ func init() {
 		fileMu:         sync.RWMutex{},
 	}
 
-	logger = NewLoggingWithFormater("global", INFO_LEVEL, 3, globalLogFormatter)
-
+	logger = NewLoggingWithFormater(INFO_LEVEL, 3, globalLogFormatter)
 }

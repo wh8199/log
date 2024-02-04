@@ -30,7 +30,7 @@ func TestFileLoggingUse(t *testing.T) {
 func TestAttachAndDatch(t *testing.T) {
 	num := len(globalConfig.observers)
 	//Automatically attach new log objects
-	logger = NewLoggingWithFormater("O-ll-O", INFO_LEVEL, 3, globalLogFormatter)
+	logger = NewLoggingWithFormater(INFO_LEVEL, 3, globalLogFormatter)
 	if len(globalConfig.observers) != num+1 {
 		t.Error("attacth fail")
 	}

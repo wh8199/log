@@ -12,7 +12,7 @@ var (
 	logger LoggingInterface
 )
 
-func globalLogFormatter(name string, level LoggingLevel, callerLevel int, pool *BufferPool, format string, args ...interface{}) *bytes.Buffer {
+func globalLogFormatter(level LoggingLevel, callerLevel int, pool *BufferPool, module, format string, args ...interface{}) *bytes.Buffer {
 	var (
 		s string
 	)
@@ -28,6 +28,13 @@ func globalLogFormatter(name string, level LoggingLevel, callerLevel int, pool *
 
 	buf := pool.Get()
 	buf.Reset()
+
+	if len(module) != 0 {
+		buf.WriteString("[")
+		buf.WriteString(module)
+		buf.WriteString("] ")
+	}
+
 	buf.WriteString(time)
 	buf.WriteString(" ")
 	buf.WriteString(caller)
