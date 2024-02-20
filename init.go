@@ -6,7 +6,6 @@ import (
 )
 
 func init() {
-
 	globalConfig = &logConfig{
 		isFile:         false,
 		prefix:         "log",
