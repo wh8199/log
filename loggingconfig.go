@@ -25,7 +25,7 @@ type logConfig struct {
 	//prefix used to generate log file names
 	prefix string
 	//Using the observer pattern
-	observers   []LoggingInterface
+	observers   []*logging
 	observersMu sync.Mutex
 	//The current output file of the log. Since multiple goroutines share this resource, a read-write lock needs to be added.
 	file *os.File
@@ -35,13 +35,13 @@ type logConfig struct {
 	exitChan chan struct{}
 }
 
-//the fileDir is the log save path, default value is current path
+// the fileDir is the log save path, default value is current path
 //
-//the prefix is generated log filename prefix, the default value is log
+// the prefix is generated log filename prefix, the default value is log
 //
-//the maxSize default is 20,unit is MB
+// the maxSize default is 20,unit is MB
 //
-//the maxSecond is seconds for log retention, after which it will be automatically deleted
+// the maxSecond is seconds for log retention, after which it will be automatically deleted
 func BuildLogConfig(isFile bool, fileDir, prefix, splitDurationStr, deleteDurationStr string, maxSize, maxSecond int) error {
 
 	if fileDir != "" {
@@ -94,15 +94,15 @@ func BuildLogConfig(isFile bool, fileDir, prefix, splitDurationStr, deleteDurati
 	return nil
 }
 
-//attach observer
-func (f *logConfig) Attach(observer LoggingInterface) {
+// attach observer
+func (f *logConfig) Attach(observer *logging) {
 	f.observersMu.Lock()
 	defer f.observersMu.Unlock()
 	f.observers = append(f.observers, observer)
 }
 
-//detach observer
-func (f *logConfig) Detach(observer LoggingInterface) {
+// detach observer
+func (f *logConfig) Detach(observer *logging) {
 	f.observersMu.Lock()
 	defer f.observersMu.Unlock()
 	for i := 0; i < len(f.observers); {
@@ -115,13 +115,13 @@ func (f *logConfig) Detach(observer LoggingInterface) {
 	}
 }
 
-//It is recommended to call this method on the last line of the main function, in order to notify all observers
+// It is recommended to call this method on the last line of the main function, in order to notify all observers
 func Notify() {
 	globalConfig.Notify()
 }
 
-//notify observer,this method is not thread safe
-//and needs to be explicitly locked when called
+// notify observer,this method is not thread safe
+// and needs to be explicitly locked when called
 func (f *logConfig) Notify() {
 	if !f.isFile {
 		return
@@ -132,7 +132,7 @@ func (f *logConfig) Notify() {
 	}
 }
 
-//Enable log write to file mode
+// Enable log write to file mode
 func Start() {
 	globalConfig.Start()
 }

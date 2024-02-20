@@ -1,14 +1,12 @@
-package log_test
+package log
 
 import (
 	"runtime"
 	"testing"
-
-	"github.com/wh8199/log"
 )
 
 func TestAlloc(t *testing.T) {
-	pool := log.NewBufferPool()
+	pool := NewBufferPool()
 
 	var m1, m2 runtime.MemStats
 	runtime.ReadMemStats(&m1)
@@ -30,7 +28,7 @@ func TestAlloc(t *testing.T) {
 }
 
 func BenchmarkAlloc(b *testing.B) {
-	pool := log.NewBufferPool()
+	pool := NewBufferPool()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

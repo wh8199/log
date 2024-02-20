@@ -7,28 +7,28 @@ import (
 	"strconv"
 )
 
-type Formatter func(module Module, level LoggingLevel, callerLevel int, pool *BufferPool, format string, args ...interface{}) *bytes.Buffer
+type Formatter func(logRecord *LogRecord) *bytes.Buffer
 
-func DefaultFormater(module Module, level LoggingLevel, callerLevel int, pool *BufferPool, format string, args ...interface{}) *bytes.Buffer {
+func DefaultFormater(logRecord *LogRecord) *bytes.Buffer {
 	var (
 		s string
 	)
 
-	if len(args) == 0 {
-		s = format
+	if len(logRecord.format) == 0 {
+		s = fmt.Sprint(logRecord.args...)
 	} else {
-		s = fmt.Sprintf(format, args...)
+		s = fmt.Sprintf(logRecord.format, logRecord.args...)
 	}
 
 	time := CacheTime()
 
-	_, caller, line, _ := runtime.Caller(callerLevel)
+	_, caller, line, _ := runtime.Caller(logRecord.callerLevel)
 	buf := pool.Get()
 	buf.Reset()
 
-	if len(module) != 0 {
+	if len(logRecord.module) != 0 {
 		buf.WriteString("[ ")
-		buf.WriteString(module.String())
+		buf.WriteString(logRecord.module)
 		buf.WriteString(" ] ")
 	}
 
@@ -38,7 +38,7 @@ func DefaultFormater(module Module, level LoggingLevel, callerLevel int, pool *B
 	buf.WriteString(":")
 	buf.WriteString(strconv.Itoa(line))
 	buf.WriteString(" ")
-	buf.WriteString(level.String())
+	buf.WriteString(logRecord.logLevel.String())
 	buf.WriteString(" msg: ")
 	buf.WriteString(s)
 	buf.WriteString("\n")
