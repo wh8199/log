@@ -5,47 +5,17 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 )
 
-/* type LoggingInterface interface {
-	Trace(args ...interface{})
-	Debug(args ...interface{})
-	Info(args ...interface{})
-	Warn(args ...interface{})
-	Error(args ...interface{})
-	Fatal(args ...interface{})
-
-	Tracef(format string, args ...interface{})
-	Debugf(format string, args ...interface{})
-	Infof(format string, args ...interface{})
-	Warnf(format string, args ...interface{})
-	Errorf(format string, args ...interface{})
-	Fatalf(format string, args ...interface{})
-
-	MTrace(module Module1, args ...interface{})
-	MDebug(module Module1, args ...interface{})
-	MInfo(module Module1, args ...interface{})
-	MWarn(module Module1, args ...interface{})
-	MError(module Module1, args ...interface{})
-	MFatal(module Module1, args ...interface{})
-
-	MTracef(module Module1, format string, args ...interface{})
-	MDebugf(module Module1, format string, args ...interface{})
-	MInfof(module Module1, format string, args ...interface{})
-	MWarnf(module Module1, format string, args ...interface{})
-	MErrorf(module Module1, format string, args ...interface{})
-	MFatalf(module Module1, format string, args ...interface{})
-
-	Close()
-
-	SetOutPut(w io.Writer)
-	SetLevel(level LoggingLevel)
-} */
-
-type Module1 string
-
-func (m Module1) String() string {
-	return string(m)
+type LogRotateConfig struct {
+	EnableLogFile bool   `json:"enableLogFile"`
+	Prefix        string `json:"prefix"`
+	FileDir       string `json:"fileDir"`
+	MaxSize       int64  `json:"maxSize"`
+	// unit is second
+	MaxLogLife int64 `json:"maxLogLife"`
+	TimeZone   int   `json:"timeZone"`
 }
 
 type LoggingLevel int
@@ -84,20 +54,14 @@ func NewLogging(name string, level LoggingLevel, callerLevel int) *logging {
 	}
 
 	logging := &logging{
-		Level:        level,
-		Out:          os.Stdout,
-		Pool:         NewBufferPool(),
-		EnableCaller: true,
-		CallerLevel:  callerLevel,
+		level:        level,
+		output:       os.Stdout,
+		pool:         NewBufferPool(),
+		enableCaller: true,
+		callerLevel:  callerLevel,
 		Formater:     DefaultFormater,
+		exitChan:     make(chan struct{}, 2),
 	}
-
-	//check globalConfig file is or not nil
-	if globalConfig.file != nil {
-		logging.SetOutPut(globalConfig.file)
-	}
-
-	globalConfig.Attach(logging)
 
 	return logging
 }
@@ -108,75 +72,80 @@ func NewLoggingWithFormater(level LoggingLevel, callerLevel int, formater Format
 	}
 
 	logging := &logging{
-		Level:        level,
-		Out:          os.Stdout,
-		Pool:         NewBufferPool(),
-		EnableCaller: true,
-		CallerLevel:  callerLevel,
+		level:        level,
+		output:       os.Stdout,
+		pool:         NewBufferPool(),
+		enableCaller: true,
+		callerLevel:  callerLevel,
 		Formater:     formater,
+		exitChan:     make(chan struct{}, 2),
 	}
-	//Check golbal file is or not  empty, not empty Change the output object at init logging
-	if globalConfig.file != nil {
-		logging.SetOutPut(globalConfig.file)
-	}
-
-	globalConfig.Attach(logging)
 
 	return logging
 }
 
 type logging struct {
-	mux sync.Mutex
-
-	Name string
+	mux  sync.Mutex
+	name string
 	// default log level
-	Level        LoggingLevel
-	Out          io.Writer
-	Pool         *BufferPool
-	EnableCaller bool
+	level        LoggingLevel
+	output       io.Writer
+	pool         *BufferPool
+	enableCaller bool
 	// default caller level
-	CallerLevel int
+	callerLevel int
 	Formater    func(logRecord *LogRecord) *bytes.Buffer
+
+	LogRotateConfig
+	exitChan chan struct{}
 }
 
 func (l *logging) Close() {
 	l.mux.Lock()
 	defer l.mux.Unlock()
-	if closer, ok := l.Out.(io.WriteCloser); ok {
-		closer.Close()
+
+	if l.exitChan != nil {
+		l.exitChan <- struct{}{}
 	}
+}
+
+func (l *logging) UpdateConfig(cfg LogRotateConfig) {
+	l.mux.Lock()
+	defer l.mux.Unlock()
+
+	l.LogRotateConfig = cfg
 }
 
 func (l *logging) SetOutPut(w io.Writer) {
 	l.mux.Lock()
 	defer l.mux.Unlock()
-	l.Out = w
+	l.output = w
 }
 
 func (l *logging) Write(buf *bytes.Buffer) {
 	l.mux.Lock()
 	defer l.mux.Unlock()
 
-	if _, err := l.Out.Write(buf.Bytes()); err != nil {
+	if _, err := l.output.Write(buf.Bytes()); err != nil {
 		panic(err)
 	}
 
-	l.Pool.Put(buf)
+	l.pool.Put(buf)
 }
 
 func (l *logging) SetLevel(level LoggingLevel) {
 	l.mux.Lock()
 	defer l.mux.Unlock()
 
-	l.Level = level
+	l.level = level
 }
 
 func (l *logging) print(level LoggingLevel, args ...interface{}) {
-	if l.Level <= level {
+	if l.level <= level {
 		record := &LogRecord{
-			logLevel:     l.Level,
-			callerLevel:  l.CallerLevel,
-			enableCaller: l.EnableCaller,
+			logLevel:     l.level,
+			callerLevel:  l.callerLevel,
+			enableCaller: l.enableCaller,
 			logger:       l,
 		}
 
@@ -185,11 +154,11 @@ func (l *logging) print(level LoggingLevel, args ...interface{}) {
 }
 
 func (l *logging) printf(level LoggingLevel, format string, args ...interface{}) {
-	if l.Level <= level {
+	if l.level <= level {
 		record := &LogRecord{
-			logLevel:     l.Level,
-			callerLevel:  l.CallerLevel,
-			enableCaller: l.EnableCaller,
+			logLevel:     l.level,
+			callerLevel:  l.callerLevel,
+			enableCaller: l.enableCaller,
 			logger:       l,
 		}
 
@@ -250,9 +219,9 @@ func (l *logging) Fatalf(format string, args ...interface{}) {
 func (l *logging) Module(moudle string) *LogRecord {
 	return &LogRecord{
 		module:       moudle,
-		logLevel:     l.Level,
-		callerLevel:  l.CallerLevel,
-		enableCaller: l.EnableCaller,
+		logLevel:     l.level,
+		callerLevel:  l.callerLevel,
+		enableCaller: l.enableCaller,
 		logger:       l,
 	}
 }
@@ -268,8 +237,44 @@ func (l *logging) Caller(level int) *LogRecord {
 func (l *logging) LogLevel(logLevel LoggingLevel) *LogRecord {
 	return &LogRecord{
 		logLevel:     logLevel,
-		callerLevel:  l.CallerLevel,
-		enableCaller: l.EnableCaller,
+		callerLevel:  l.callerLevel,
+		enableCaller: l.enableCaller,
 		logger:       l,
 	}
+}
+
+func (l *logging) Start() {
+	if !l.EnableLogFile {
+		return
+	}
+
+	output, err := NewFileOutput(l.LogRotateConfig)
+	if err != nil {
+		panic(err)
+	}
+
+	l.SetOutPut(output)
+
+	go func() {
+		ticker := time.NewTicker(time.Second * 1)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				l.mux.Lock()
+				fileOutput := l.output.(OutPut)
+				if err := fileOutput.Rotate(); err != nil {
+					panic(err)
+				}
+				l.mux.Unlock()
+
+			case <-l.exitChan:
+				if closer, ok := l.output.(io.WriteCloser); ok {
+					closer.Close()
+				}
+				return
+			}
+		}
+	}()
 }

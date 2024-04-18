@@ -1,18 +1,16 @@
-package log_test
+package log
 
 import (
 	"bytes"
 	"strings"
 	"testing"
-
-	"github.com/wh8199/log"
 )
 
 func TestInfo(t *testing.T) {
 	buf := &bytes.Buffer{}
 	testMessage := "Test Message"
 
-	logging := log.NewLogging("test", log.INFO_LEVEL, 4)
+	logging := NewLogging("test", INFO_LEVEL, 4)
 	logging.SetOutPut(buf)
 
 	buf.Reset()
@@ -43,7 +41,7 @@ func TestLevel(t *testing.T) {
 	buf := &bytes.Buffer{}
 	testMessage := "Test Message"
 
-	logging := log.NewLogging("test", log.INFO_LEVEL, 2)
+	logging := NewLogging("test", INFO_LEVEL, 2)
 	logging.SetOutPut(buf)
 
 	buf.Reset()
@@ -61,15 +59,25 @@ func TestLevel(t *testing.T) {
 	}
 }
 
-func BenchmarkInfo(b *testing.B) {
-	testMessage := "Test Message"
-	buf := &bytes.Buffer{}
+func TestUpdateOutput(t *testing.T) {
+	l := NewLogging("test", DEBUG_LEVEL, 2)
 
-	logging := log.NewLogging("test", log.INFO_LEVEL, 2)
-	logging.SetOutPut(buf)
+	buf := bytes.Buffer{}
+	buf1 := bytes.Buffer{}
 
-	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		logging.Info(testMessage)
+	l.SetOutPut(&buf)
+	l.Info("buffer1")
+
+	l.SetOutPut(&buf1)
+	l.Info("buffer2")
+
+	if !strings.Contains(buf.String(), "buffer1") {
+		t.Error("update output failed")
+		return
+	}
+
+	if !strings.Contains(buf1.String(), "buffer2") {
+		t.Error("update output failed")
+		return
 	}
 }

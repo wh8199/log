@@ -4,4 +4,7 @@ test:
 bench:
 	go test -bench .
 
-.PHONY: test bench
+clean:
+	rm -rf *.log
+
+.PHONY: test bench clean
