@@ -124,3 +124,11 @@ func Module(module string) *LogRecord {
 func CallLevel(level int) *LogRecord {
 	return logger.Caller(level)
 }
+
+func Start() {
+	logger.Start()
+}
+
+func UpdateConfig(cfg LogRotateConfig) {
+	logger.UpdateConfig(cfg)
+}

@@ -24,8 +24,7 @@ func joinFilePath(path, file string) string {
 	return filepath.Join(path, file)
 }
 
-func generateFileName(prefix string) string {
-	current := time.Now().Local()
+func generateFileName(prefix string, t time.Time) string {
 	format := fmt.Sprintf("%s_20060102_150405.log", prefix)
-	return current.Format(format)
+	return t.Format(format)
 }

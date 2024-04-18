@@ -81,3 +81,23 @@ func TestUpdateOutput(t *testing.T) {
 		return
 	}
 }
+
+func TestPrintLevel(t *testing.T) {
+	buf := &bytes.Buffer{}
+	testMessage := "Test Message"
+
+	logging := NewLogging("test", INFO_LEVEL, 2)
+	logging.SetOutPut(buf)
+
+	buf.Reset()
+	logging.Info(testMessage)
+	if buf.Len() == 0 {
+		t.Error("test level failed")
+		return
+	}
+
+	if !strings.Contains(buf.String(), "Info") {
+		t.Error("test log level failed")
+		return
+	}
+}

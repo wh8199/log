@@ -2,6 +2,7 @@ package log
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -20,10 +21,6 @@ var _ OutPut = &BufferOutput{}
 // BufferOutput is use for unit test
 type BufferOutput struct {
 	bytes.Buffer
-}
-
-func (b *BufferOutput) GetSize() (int64, error) {
-	return int64(b.Len()), nil
 }
 
 func (b *BufferOutput) Rotate() error {
@@ -50,27 +47,18 @@ func NewFileOutput(rotateConfig LogRotateConfig) (io.Writer, error) {
 	return fileOutput, nil
 }
 
-func (f *FileOutput) GetSize() (int64, error) {
-	file, err := os.Stat(f.fileName)
-	if err != nil {
-		return 0, err
-	}
-
-	return file.Size(), nil
-}
-
 func (f *FileOutput) parseFileTime(fileName string) (int64, error) {
 	t, err := time.ParseInLocation(fmt.Sprintf("%s_20060102_150405.log", f.Prefix), fileName, time.Local)
 	if err != nil {
 		return 0, err
 	}
 
-	return t.UnixMilli(), nil
+	return t.Unix(), nil
 }
 
 func (f *FileOutput) parseFileName(fileName string) (bool, int64, error) {
 	if !(strings.HasSuffix(fileName, ".log") && strings.HasPrefix(fileName, f.Prefix)) {
-		return false, 0, nil
+		return false, 0, fmt.Errorf("invalid log file")
 	}
 
 	ts, err := f.parseFileTime(fileName)
@@ -81,7 +69,7 @@ func (f *FileOutput) parseFileName(fileName string) (bool, int64, error) {
 	return true, ts, nil
 }
 
-func (f *FileOutput) getExpiredLogs() (map[string]int64, error) {
+func (f *FileOutput) getAllLogs() (map[string]int64, error) {
 	fileInfos, err := ioutil.ReadDir(f.FileDir)
 	if err != nil {
 		return nil, err
@@ -93,11 +81,7 @@ func (f *FileOutput) getExpiredLogs() (map[string]int64, error) {
 		name := fileInfo.Name()
 
 		isLogFile, ts, err := f.parseFileName(name)
-		if err != nil {
-			return nil, err
-		}
-
-		if !isLogFile {
+		if err != nil || !isLogFile {
 			continue
 		}
 
@@ -107,21 +91,18 @@ func (f *FileOutput) getExpiredLogs() (map[string]int64, error) {
 	return ret, nil
 }
 
-func (f *FileOutput) cleanExpiredLogs() error {
-	logs, err := f.getExpiredLogs()
+func (f *FileOutput) cleanExpiredLogs(now int64) error {
+	logs, err := f.getAllLogs()
 	if err != nil {
 		return err
 	}
-
-	now := time.Now().UnixMilli()
 
 	for logName, ts := range logs {
 		if logName == f.fileName {
 			continue
 		}
 
-		if ts+f.MaxLogLife*1000 < now {
-			fmt.Println("remove log file ", logName, ",now: ", now)
+		if ts+f.MaxLogLife < now {
 			os.Remove(logName)
 		}
 	}
@@ -129,8 +110,8 @@ func (f *FileOutput) cleanExpiredLogs() error {
 	return nil
 }
 
-func (f *FileOutput) generateFile() error {
-	fileName := generateFileName(f.Prefix)
+func (f *FileOutput) generateFileWithTime(t time.Time) error {
+	fileName := generateFileName(f.Prefix, t)
 
 	logFile := joinFilePath(f.FileDir, fileName)
 	if !isExist(f.FileDir) {
@@ -154,9 +135,17 @@ func (f *FileOutput) generateFile() error {
 	return nil
 }
 
+func (f *FileOutput) generateFile() error {
+	return f.generateFileWithTime(time.Now().Local())
+}
+
 func (f *FileOutput) checkLogFileSize() (bool, error) {
 	fileInfo, err := os.Stat(f.fileName)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return true, nil
+		}
+
 		return false, err
 	}
 
@@ -169,11 +158,13 @@ func (f *FileOutput) Rotate() error {
 		return err
 	}
 
+	t := time.Now().Local()
+
 	if needNewFile {
-		if err := f.generateFile(); err != nil {
+		if err := f.generateFileWithTime(t); err != nil {
 			return err
 		}
 	}
 
-	return f.cleanExpiredLogs()
+	return f.cleanExpiredLogs(t.Unix())
 }

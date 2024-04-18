@@ -15,7 +15,6 @@ type LogRotateConfig struct {
 	MaxSize       int64  `json:"maxSize"`
 	// unit is second
 	MaxLogLife int64 `json:"maxLogLife"`
-	TimeZone   int   `json:"timeZone"`
 }
 
 type LoggingLevel int
@@ -98,6 +97,8 @@ type logging struct {
 
 	LogRotateConfig
 	exitChan chan struct{}
+
+	isStarted bool
 }
 
 func (l *logging) Close() {
@@ -143,7 +144,7 @@ func (l *logging) SetLevel(level LoggingLevel) {
 func (l *logging) print(level LoggingLevel, args ...interface{}) {
 	if l.level <= level {
 		record := &LogRecord{
-			logLevel:     l.level,
+			logLevel:     level,
 			callerLevel:  l.callerLevel,
 			enableCaller: l.enableCaller,
 			logger:       l,
@@ -156,7 +157,7 @@ func (l *logging) print(level LoggingLevel, args ...interface{}) {
 func (l *logging) printf(level LoggingLevel, format string, args ...interface{}) {
 	if l.level <= level {
 		record := &LogRecord{
-			logLevel:     l.level,
+			logLevel:     level,
 			callerLevel:  l.callerLevel,
 			enableCaller: l.enableCaller,
 			logger:       l,
@@ -248,6 +249,13 @@ func (l *logging) Start() {
 		return
 	}
 
+	l.mux.Lock()
+	if l.isStarted {
+		l.mux.Unlock()
+		return
+	}
+	l.mux.Unlock()
+
 	output, err := NewFileOutput(l.LogRotateConfig)
 	if err != nil {
 		panic(err)
@@ -267,8 +275,8 @@ func (l *logging) Start() {
 				if err := fileOutput.Rotate(); err != nil {
 					panic(err)
 				}
-				l.mux.Unlock()
 
+				l.mux.Unlock()
 			case <-l.exitChan:
 				if closer, ok := l.output.(io.WriteCloser); ok {
 					closer.Close()
@@ -277,4 +285,8 @@ func (l *logging) Start() {
 			}
 		}
 	}()
+
+	l.mux.Lock()
+	l.isStarted = true
+	l.mux.Unlock()
 }
